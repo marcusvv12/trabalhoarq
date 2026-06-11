@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <title>Sistema Acadêmico — Escalabilidade Horizontal</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header>
+  <div>
+    <h1>Sistema Acadêmico</h1>
+    <p>Escalabilidade Horizontal &amp; Balanceamento de Carga — nginx → app-1 / app-2 → PostgreSQL</p>
+  </div>
+  <div class="badge">
+    Última instância que respondeu:&nbsp;<strong id="last-inst">—</strong>
+  </div>
+</header>
+
+<main>
+
+  <!-- Painel de instâncias -->
+  <div class="card">
+    <div class="card-title">Instâncias em execução</div>
+    <div class="inst-grid">
+      <div class="inst alive" id="card1">
+        <div class="inst-name"><span class="dot" id="dot1"></span>app-1 <span style="color:#64748b;font-weight:400;font-size:.8rem">· porta 3001</span></div>
+        <div class="inst-detail" id="info1">Verificando…</div>
+      </div>
+      <div class="inst alive i2" id="card2">
+        <div class="inst-name"><span class="dot" id="dot2"></span>app-2 <span style="color:#64748b;font-weight:400;font-size:.8rem">· porta 3002</span></div>
+        <div class="inst-detail" id="info2">Verificando…</div>
+      </div>
+    </div>
+    <p style="margin-top:.875rem;font-size:.75rem;color:#475569">
+      O nginx (porta 8080) distribui as requisições em <b style="color:#94a3b8">round-robin</b> entre as instâncias. Para simular falha: <code style="color:#e2e8f0">docker compose stop app1</code>
+    </p>
+  </div>
+
+  <!-- Formulários -->
+  <div class="row2">
+    <div class="card">
+      <div class="card-title">Cadastrar registro</div>
+      <form onsubmit="createRecord(event)">
+        <div style="display:grid;gap:.75rem">
+          <div><label>Nome *</label><input id="fName" placeholder="Ex: Maria Silva" required></div>
+          <div><label>Tipo *</label>
+            <select id="fType">
+              <option value="matricula">Matrícula</option>
+              <option value="disciplina">Disciplina</option>
+              <option value="nota">Nota</option>
+              <option value="aluno">Aluno</option>
+            </select>
+          </div>
+          <div><label>Detalhe</label><input id="fDetail" placeholder="Ex: Engenharia de Software"></div>
+          <button type="submit" style="width:100%">Cadastrar</button>
+        </div>
+      </form>
+    </div>
+
+    <div class="card" id="editCard" style="display:none">
+      <div class="card-title">Editar registro <span id="editIdLabel"></span></div>
+      <div style="display:grid;gap:.75rem">
+        <div><label>Nome</label><input id="eName"></div>
+        <div><label>Tipo</label>
+          <select id="eType">
+            <option value="matricula">Matrícula</option>
+            <option value="disciplina">Disciplina</option>
+            <option value="nota">Nota</option>
+            <option value="aluno">Aluno</option>
+          </select>
+        </div>
+        <div><label>Detalhe</label><input id="eDetail"></div>
+        <div style="display:flex;gap:.5rem">
+          <button onclick="saveEdit()" style="flex:1">Salvar alterações</button>
+          <button class="gray" onclick="cancelEdit()" style="flex:1">Cancelar</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Tabela de registros -->
+  <div class="card">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem">
+      <div class="card-title" style="margin:0">Registros cadastrados</div>
+      <button class="gray" onclick="loadRecords()" style="font-size:.75rem;padding:.4rem .8rem">↻ Atualizar</button>
+    </div>
+    <div id="tableWrap"><div class="empty">Carregando…</div></div>
+  </div>
+
+  <!-- Teste de balanceamento -->
+  <div class="card">
+    <div class="card-title">Demonstração de balanceamento de carga</div>
+    <div class="lb-grid">
+      <div>
+        <p style="font-size:.83rem;color:#94a3b8;margin-bottom:1rem;line-height:1.6">
+          Dispara <b style="color:#e2e8f0">múltiplas requisições simultâneas</b> para <code style="color:#e2e8f0">/health</code>.
+          O nginx distribui em round-robin entre app-1 e app-2.
+          O gráfico mostra a divisão real das respostas.
+        </p>
+        <div class="btn-row">
+          <button class="green" onclick="loadTest(10)">10 requisições</button>
+          <button class="green" onclick="loadTest(20)">20 requisições</button>
+          <button class="green" onclick="loadTest(50)">50 requisições</button>
+          <button class="gray" onclick="clearTest()">Limpar</button>
+        </div>
+        <div class="bars">
+          <div class="bar-row">
+            <span class="bar-lbl">app-1</span>
+            <div class="bar-wrap"><div class="bar-fill b1" id="b1" style="width:0"></div></div>
+          </div>
+          <div class="bar-row">
+            <span class="bar-lbl">app-2</span>
+            <div class="bar-wrap"><div class="bar-fill b2" id="b2" style="width:0"></div></div>
+          </div>
+        </div>
+        <div class="summary" id="summary"></div>
+      </div>
+      <div>
+        <div style="font-size:.72rem;color:#64748b;margin-bottom:.4rem">Log de requisições</div>
+        <div class="log-box" id="logBox"></div>
+      </div>
+    </div>
+  </div>
+
+</main>
+
+<script>
+let editId = null;
+const tc = {'app-1': 0, 'app-2': 0};
+
+// ── Saúde das instâncias (acessa diretamente pelas portas expostas) ──────────
+
+async function checkInstance(port, num) {
+  const dot  = document.getElementById('dot'  + num);
+  const info = document.getElementById('info' + num);
+  const card = document.getElementById('card' + num);
+  try {
+    const r = await fetch('http://localhost:' + port + '/metrics');
+    const d = await r.json();
+    dot.className = 'dot';
+    info.innerHTML = 'Status: <b style="color:#22c55e">online</b> &nbsp;·&nbsp; Requisições atendidas: <b>' + d.requestCount + '</b> &nbsp;·&nbsp; Tempo médio: <b>' + d.averageResponseMs + ' ms</b>';
+    card.className = 'inst alive' + (num === 2 ? ' i2' : '');
+  } catch {
+    dot.className = 'dot red';
+    info.innerHTML = 'Status: <b style="color:#ef4444">offline / sem resposta</b>';
+    card.className = 'inst dead';
+  }
+}
+
+function checkHealth() {
+  checkInstance(3001, 1);
+  checkInstance(3002, 2);
+}
+
+// ── Badge da última instância ────────────────────────────────────────────────
+
+function setLast(instanceId) {
+  const el = document.getElementById('last-inst');
+  el.textContent = instanceId;
+  el.className = instanceId === 'app-1' ? 'c1' : 'c2';
+}
+
+// ── CRUD ─────────────────────────────────────────────────────────────────────
+
+async function loadRecords() {
+  const wrap = document.getElementById('tableWrap');
+  try {
+    const r = await fetch('/records');
+    const d = await r.json();
+    setLast(d.instanceId);
+    if (!d.records.length) {
+      wrap.innerHTML = '<div class="empty">Nenhum registro ainda. Cadastre o primeiro acima.</div>';
+      return;
+    }
+    wrap.innerHTML = '<table><thead><tr>' +
+      '<th>ID</th><th>Nome</th><th>Tipo</th><th>Detalhe</th><th>Criado em</th><th>Instância que listou</th><th>Ações</th>' +
+      '</tr></thead><tbody>' +
+      d.records.map(function(rec) {
+        return '<tr>' +
+          '<td style="color:#64748b">#' + rec.id + '</td>' +
+          '<td><b>' + esc(rec.name) + '</b></td>' +
+          '<td>' + esc(rec.type) + '</td>' +
+          '<td>' + esc(rec.detail || '—') + '</td>' +
+          '<td style="color:#64748b;font-size:.8rem">' + new Date(rec.created_at).toLocaleString('pt-BR') + '</td>' +
+          '<td><span class="tag' + (d.instanceId === 'app-2' ? ' t2' : '') + '">' + d.instanceId + '</span></td>' +
+          '<td><div class="acts">' +
+            '<button class="gray" style="font-size:.75rem;padding:.35rem .7rem" onclick="startEdit(' + rec.id + ',\'' + escJs(rec.name) + '\',\'' + escJs(rec.type) + '\',\'' + escJs(rec.detail || '') + '\')">Editar</button>' +
+            '<button class="red"  style="font-size:.75rem;padding:.35rem .7rem" onclick="deleteRecord(' + rec.id + ')">Remover</button>' +
+          '</div></td>' +
+        '</tr>';
+      }).join('') +
+      '</tbody></table>';
+  } catch(e) {
+    wrap.innerHTML = '<div class="empty">Erro ao carregar: ' + e.message + '</div>';
+  }
+}
+
+function esc(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+function escJs(s) {
+  return String(s).replace(/\\/g,'\\\\').replace(/'/g,"\\'");
+}
+
+async function createRecord(e) {
+  e.preventDefault();
+  const name   = document.getElementById('fName').value.trim();
+  const type   = document.getElementById('fType').value;
+  const detail = document.getElementById('fDetail').value.trim();
+  const r = await fetch('/records', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({name, type, detail})
+  });
+  const d = await r.json();
+  setLast(d.instanceId);
+  document.getElementById('fName').value   = '';
+  document.getElementById('fDetail').value = '';
+  loadRecords();
+  checkHealth();
+}
+
+function startEdit(id, name, type, detail) {
+  editId = id;
+  document.getElementById('eName').value        = name;
+  document.getElementById('eType').value        = type;
+  document.getElementById('eDetail').value      = detail;
+  document.getElementById('editIdLabel').textContent = '#' + id;
+  document.getElementById('editCard').style.display = 'block';
+  document.getElementById('editCard').scrollIntoView({behavior: 'smooth', block: 'nearest'});
+}
+
+function cancelEdit() {
+  editId = null;
+  document.getElementById('editCard').style.display = 'none';
+}
+
+async function saveEdit() {
+  const name   = document.getElementById('eName').value.trim();
+  const type   = document.getElementById('eType').value;
+  const detail = document.getElementById('eDetail').value.trim();
+  const r = await fetch('/records/' + editId, {
+    method: 'PUT',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({name, type, detail})
+  });
+  const d = await r.json();
+  setLast(d.instanceId);
+  cancelEdit();
+  loadRecords();
+  checkHealth();
+}
+
+async function deleteRecord(id) {
+  if (!confirm('Remover registro #' + id + '?')) return;
+  const r = await fetch('/records/' + id, {method: 'DELETE'});
+  const d = await r.json();
+  setLast(d.instanceId);
+  loadRecords();
+  checkHealth();
+}
+
+// ── Teste de carga ────────────────────────────────────────────────────────────
+
+async function loadTest(n) {
+  tc['app-1'] = 0; tc['app-2'] = 0;
+  document.getElementById('logBox').innerHTML   = '';
+  document.getElementById('summary').textContent = 'Disparando ' + n + ' requisições simultâneas…';
+
+  const reqs = Array.from({length: n}, function(_, i) {
+    return fetch('/health')
+      .then(function(r) { return r.json(); })
+      .then(function(d) {
+        tc[d.instanceId] = (tc[d.instanceId] || 0) + 1;
+        addLog('[' + String(i+1).padStart(2,'0') + '] → ' + d.instanceId, d.instanceId === 'app-1' ? 'l1' : 'l2');
+        updateBars();
+        setLast(d.instanceId);
+      })
+      .catch(function() { addLog('[' + String(i+1).padStart(2,'0') + '] → ERRO', 'le'); });
+  });
+
+  await Promise.all(reqs);
+
+  const total = (tc['app-1']||0) + (tc['app-2']||0);
+  const pct   = function(id) { return total ? Math.round((tc[id]||0) / total * 100) : 0; };
+  document.getElementById('summary').innerHTML =
+    '<b>' + total + '</b> requisições concluídas &nbsp;·&nbsp; ' +
+    'app-1: <b style="color:#38bdf8">' + (tc['app-1']||0) + '</b> (' + pct('app-1') + '%) &nbsp;·&nbsp; ' +
+    'app-2: <b style="color:#a78bfa">' + (tc['app-2']||0) + '</b> (' + pct('app-2') + '%)';
+
+  checkHealth();
+}
+
+function updateBars() {
+  var done = (tc['app-1']||0) + (tc['app-2']||0) || 1;
+  ['app-1','app-2'].forEach(function(id, i) {
+    var el  = document.getElementById('b' + (i+1));
+    var pct = Math.round((tc[id]||0) / done * 100);
+    el.style.width = pct + '%';
+    el.textContent = pct > 8 ? tc[id] + ' (' + pct + '%)' : '';
+  });
+}
+
+function clearTest() {
+  tc['app-1'] = 0; tc['app-2'] = 0;
+  document.getElementById('logBox').innerHTML   = '';
+  document.getElementById('summary').textContent = '';
+  document.getElementById('b1').style.width = '0'; document.getElementById('b1').textContent = '';
+  document.getElementById('b2').style.width = '0'; document.getElementById('b2').textContent = '';
+}
+
+function addLog(msg, cls) {
+  var box = document.getElementById('logBox');
+  var p   = document.createElement('p');
+  p.className   = cls;
+  p.textContent = msg;
+  box.appendChild(p);
+  box.scrollTop = box.scrollHeight;
+}
+
+// ── Init ──────────────────────────────────────────────────────────────────────
+checkHealth();
+loadRecords();
+setInterval(checkHealth, 8000);
+</script>
+</body>
+</html>

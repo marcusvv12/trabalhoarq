@@ -1,0 +1,58 @@
+version: "3.9"
+
+services:
+  db:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_USER: appuser
+      POSTGRES_PASSWORD: secret
+      POSTGRES_DB: academic
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U appuser -d academic"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  app1:
+    build: .
+    environment:
+      PGHOST: db
+      PGUSER: appuser
+      PGPASSWORD: secret
+      PGDATABASE: academic
+      INSTANCE_ID: app-1
+    ports:
+      - "3001:3000"
+    depends_on:
+      db:
+        condition: service_healthy
+
+  app2:
+    build: .
+    environment:
+      PGHOST: db
+      PGUSER: appuser
+      PGPASSWORD: secret
+      PGDATABASE: academic
+      INSTANCE_ID: app-2
+    ports:
+      - "3002:3000"
+    depends_on:
+      db:
+        condition: service_healthy
+
+  lb:
+    image: nginx:stable-alpine
+    ports:
+      - "8080:80"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./public:/usr/share/nginx/html:ro
+    depends_on:
+      - app1
+      - app2
+
+volumes:
+  db-data:

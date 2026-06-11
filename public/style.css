@@ -1,0 +1,180 @@
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0 }
+body { font-family: 'Segoe UI', system-ui, sans-serif; background: #0f172a; color: #e2e8f0; min-height: 100vh }
+
+/* ── Header ─────────────────────────────────────────────────────────────── */
+
+header {
+  background: #1e293b;
+  border-bottom: 1px solid #334155;
+  padding: 1.25rem 2rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+header h1 { font-size: 1.25rem; font-weight: 700 }
+header p  { font-size: 0.8rem; color: #64748b; margin-top: 0.2rem }
+
+.badge {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: #0f172a;
+  border: 1px solid #334155;
+  border-radius: 8px;
+  padding: 0.5rem 0.875rem;
+  font-size: 0.8rem;
+  color: #94a3b8;
+}
+.badge strong { font-size: 0.9rem }
+.c1 { color: #38bdf8 }
+.c2 { color: #a78bfa }
+
+/* ── Layout ──────────────────────────────────────────────────────────────── */
+
+main { max-width: 1200px; margin: 1.5rem auto; padding: 0 1.25rem; display: grid; gap: 1.25rem }
+
+.row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 1.25rem }
+
+/* ── Cards ───────────────────────────────────────────────────────────────── */
+
+.card { background: #1e293b; border: 1px solid #334155; border-radius: 12px; padding: 1.5rem }
+.card-title {
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  margin-bottom: 1rem;
+}
+
+/* ── Instâncias ──────────────────────────────────────────────────────────── */
+
+.inst-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem }
+
+.inst {
+  background: #0f172a;
+  border: 2px solid #1e293b;
+  border-radius: 10px;
+  padding: 0.875rem;
+  transition: border-color .3s, opacity .3s;
+}
+.inst.alive       { border-color: #334155 }
+.inst.active-last { border-color: #38bdf8 }
+.inst.active-last.i2 { border-color: #a78bfa }
+.inst.dead        { border-color: #991b1b; opacity: 0.55 }
+
+.inst-name {
+  font-weight: 600;
+  font-size: 0.9rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.dot { width: 8px; height: 8px; border-radius: 50%; background: #22c55e; flex-shrink: 0 }
+.dot.red { background: #ef4444 }
+.inst-detail { font-size: 0.75rem; color: #64748b; margin-top: 0.5rem; line-height: 1.6 }
+
+/* ── Formulários ─────────────────────────────────────────────────────────── */
+
+label { display: block; font-size: 0.75rem; color: #94a3b8; margin-bottom: 0.3rem }
+
+input, select {
+  width: 100%;
+  background: #0f172a;
+  border: 1px solid #475569;
+  border-radius: 8px;
+  padding: 0.6rem 0.8rem;
+  color: #e2e8f0;
+  font-size: 0.875rem;
+  font-family: inherit;
+}
+input:focus, select:focus {
+  outline: none;
+  border-color: #38bdf8;
+  box-shadow: 0 0 0 2px rgba(56, 189, 248, .15);
+}
+
+/* ── Botões ──────────────────────────────────────────────────────────────── */
+
+button {
+  background: #3b82f6;
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  padding: 0.6rem 1.1rem;
+  cursor: pointer;
+  font-size: 0.875rem;
+  font-weight: 500;
+  font-family: inherit;
+  white-space: nowrap;
+  transition: background .15s;
+}
+button:hover       { background: #2563eb }
+button.gray        { background: #334155 }
+button.gray:hover  { background: #475569 }
+button.red         { background: #dc2626 }
+button.red:hover   { background: #b91c1c }
+button.green       { background: #16a34a }
+button.green:hover { background: #15803d }
+
+/* ── Tabela ──────────────────────────────────────────────────────────────── */
+
+table { width: 100%; border-collapse: collapse }
+th {
+  text-align: left;
+  font-size: 0.7rem;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  padding: .625rem .75rem;
+  border-bottom: 1px solid #334155;
+}
+td { padding: .75rem; font-size: 0.875rem; border-bottom: 1px solid #1e293b; vertical-align: middle }
+tr:last-child td { border: none }
+tr:hover td { background: rgba(255, 255, 255, .02) }
+
+.tag { font-size: 0.7rem; font-weight: 600; padding: .15rem .5rem; border-radius: 999px; background: #0c2a3e; color: #38bdf8; white-space: nowrap }
+.tag.t2 { background: #1e1040; color: #a78bfa }
+.acts { display: flex; gap: .5rem }
+.empty { text-align: center; color: #475569; padding: 2rem; font-size: 0.875rem }
+
+/* ── Teste de balanceamento ──────────────────────────────────────────────── */
+
+.lb-grid { display: grid; grid-template-columns: 1.2fr 1fr; gap: 1.25rem; align-items: start }
+.btn-row { display: flex; gap: .625rem; flex-wrap: wrap; margin-bottom: 1rem }
+
+.bars { display: flex; flex-direction: column; gap: .625rem; margin-top: 1rem }
+.bar-row { display: flex; align-items: center; gap: .75rem }
+.bar-lbl { width: 52px; font-size: .75rem; color: #94a3b8; flex-shrink: 0 }
+.bar-wrap { flex: 1; background: #0f172a; border-radius: 4px; height: 28px; overflow: hidden }
+.bar-fill {
+  height: 100%;
+  border-radius: 4px;
+  transition: width .4s ease;
+  display: flex;
+  align-items: center;
+  padding-left: .5rem;
+  font-size: .7rem;
+  font-weight: 600;
+  color: #fff;
+  white-space: nowrap;
+  min-width: 0;
+}
+.bar-fill.b1 { background: #38bdf8 }
+.bar-fill.b2 { background: #a78bfa }
+
+.log-box {
+  background: #0f172a;
+  border-radius: 8px;
+  padding: .75rem;
+  font-family: 'Consolas', monospace;
+  font-size: .72rem;
+  max-height: 200px;
+  overflow-y: auto;
+}
+.log-box p  { padding: .1rem 0 }
+.log-box .l1 { color: #38bdf8 }
+.log-box .l2 { color: #a78bfa }
+.log-box .le { color: #f87171 }
+
+.summary { font-size: .78rem; color: #94a3b8; margin-top: .75rem; line-height: 1.6 }
