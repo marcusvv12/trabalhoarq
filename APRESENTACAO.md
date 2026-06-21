@@ -1,144 +1,175 @@
-# Guia de Apresentação — Escalabilidade Horizontal e Balanceamento de Carga
+# Roteiro de Apresentacao — Escalabilidade Horizontal e Balanceamento de Carga
 
-## O que foi construído
-
-Uma API REST acadêmica executando em **duas instâncias simultâneas** (`app-1` e `app-2`), com um **balanceador de carga nginx** distribuindo as requisições entre elas, um banco de dados PostgreSQL compartilhado e um **frontend** para demonstrar tudo funcionando em tempo real.
-
-```
-Navegador (localhost:8080)
-        │
-      nginx  ← balanceador de carga (round-robin)
-      /    \
-  app-1   app-2   ← instâncias Node.js idênticas
-      \    /
-    PostgreSQL    ← banco compartilhado
-```
+> **Formato:** 12 slides | Tempo estimado: 15–20 minutos + demo ao vivo
 
 ---
 
-## Como iniciar antes de apresentar
+## Antes de comecar
 
 ```powershell
-# No terminal, dentro da pasta do projeto:
 docker compose down -v
 docker compose up --build
 ```
 
-Aguarde as duas linhas aparecerem:
+Aguarde:
 ```
 app1-1 | API academic listening on port 3000 (instance=app-1)
 app2-1 | API academic listening on port 3000 (instance=app-2)
 ```
 
-Depois abra no navegador: **http://localhost:8080**
+Abra no navegador: **http://localhost:8080**
 
 ---
 
-## Roteiro de demonstração (passo a passo)
+## Slide 1 — Capa
 
-### 1. Mostrar a arquitetura em execução
-
-Aponte para o painel "Instâncias em execução" no topo da página.
-
-> *"Aqui vemos as duas instâncias da API rodando simultaneamente. Cada uma reporta quantas requisições já atendeu e o tempo médio de resposta. O badge no canto superior direito mostra qual instância respondeu à última requisição."*
+> "Nosso trabalho implementa escalabilidade horizontal e balanceamento de carga sobre uma API academica real. Vamos mostrar o conceito funcionando na pratica: duas instancias Node.js, um balanceador NGINX e um banco PostgreSQL compartilhado, tudo orquestrado com Docker Compose."
 
 ---
 
-### 2. Demonstrar o balanceamento de carga
+## Slide 2 — Contexto e Problema
 
-Clique em **"20 requisições"** na seção de demonstração.
+> "O cenario e simples: uma universidade tem uma API para gestao academica. Em periodos de matricula, o volume de acessos explode. Uma unica instancia da aplicacao nao aguenta esse pico — ela fica lenta ou cai."
 
-> *"Estamos disparando 20 requisições ao mesmo tempo para o balanceador. O nginx distribui em round-robin — uma requisição vai para app-1, a próxima para app-2, e assim sucessivamente. O gráfico mostra que cada instância atendeu aproximadamente metade. Isso é a escalabilidade horizontal funcionando: o trabalho foi dividido entre múltiplas instâncias."*
-
-O gráfico vai mostrar ~50% para cada. O log mostra cada requisição e qual instância respondeu.
+> "O problema classico de instancia unica e triplo: e um gargalo de desempenho, e um ponto unico de falha, e exige parada total para manutencao. A solucao que implementamos e distribuir a carga entre multiplas instancias identicas usando um balanceador na frente."
 
 ---
 
-### 3. Demonstrar as operações CRUD
+## Slide 3 — Arquitetura da Solucao
 
-Use o formulário "Cadastrar registro" para criar 2 ou 3 registros.
+> "O fluxo e este: o cliente faz uma requisicao HTTP na porta 8080. O NGINX recebe, escolhe qual instancia vai responder usando round-robin, e repassa para app-1 ou app-2. As duas instancias sao identicas — mesmo codigo, mesma porta interna 3000. Ambas acessam o mesmo banco PostgreSQL. Por isso qualquer instancia pode atender qualquer requisicao sem diferenca para o usuario."
 
-> *"A API suporta todas as operações: cadastrar, consultar, listar, atualizar e remover registros. Observe o badge 'Última instância que respondeu' — ele alterna entre app-1 e app-2 a cada operação, provando que o nginx está distribuindo as chamadas."*
-
-Mostre editar um registro e depois remover outro.
+> "A stack: Node.js 20 com Express na API, PostgreSQL 15 como unico repositorio de dados, NGINX como balanceador, e Docker Compose orquestrando os quatro containers."
 
 ---
 
-### 4. Demonstrar a identificação da instância
+## Slide 4 — Escalabilidade: Horizontal vs Vertical
 
-Na tabela de registros, a coluna **"Instância que listou"** mostra qual instância respondeu cada listagem.
+> "Existem duas formas de lidar com crescimento de carga. Escalabilidade vertical e colocar mais CPU e RAM no mesmo servidor. Funciona ate um ponto, mas o custo cresce de forma exponencial, existe um limite fisico de hardware, e o ponto unico de falha continua la."
 
-> *"Cada resposta da API inclui o campo `instanceId`, que identifica qual das instâncias processou a requisição. Isso é importante para depuração e também para demonstrar que o balanceamento está ocorrendo de fato."*
+> "Escalabilidade horizontal e adicionar mais instancias identicas. O custo e linear — voce paga por mais uma maquina igual. Nao ha limite pratico de crescimento. E se uma instancia cair, as outras absorvem o trafego. Por isso escolhemos essa abordagem — esta marcada como ADOTADO no slide."
 
 ---
 
-### 5. Demonstrar falha de instância (ponto mais impactante)
+## Slide 5 — Stateless: O Pilar da Escalabilidade Horizontal
 
-Abra um **segundo terminal** e rode:
+> "Para que o balanceamento funcione, a aplicacao precisa ser stateless — sem estado local em memoria. Vamos entender por que isso e obrigatorio."
 
+> "Se a aplicacao guardar sessao em memoria, o usuario loga em app-1, a proxima requisicao vai para app-2, e app-2 nao sabe que ele esta logado — sessao perdida. Se guardar cache local, app-1 atualiza um dado e app-2 ainda serve o valor antigo. Se a instancia cair, tudo que estava na memoria dela some."
+
+> "Nossa solucao: nenhum dado de negocio fica em memoria. O PostgreSQL e o unico repositorio de verdade. Qualquer instancia acessa os mesmos dados, entrega o mesmo resultado. O NGINX pode mandar req 1 para app-1 e req 2 para app-2 sem nenhum problema."
+
+---
+
+## Slide 6 — Endpoints da API
+
+> "A API implementa CRUD completo. GET /records lista todos os registros. GET /records/:id consulta um especifico. POST cria, PUT atualiza, DELETE remove."
+
+> "Alem do CRUD, temos dois endpoints de observabilidade: /health retorna o status da instancia e da conexao com o banco, e /metrics retorna o contador de requisicoes e o tempo medio de resposta — por instancia."
+
+> "Um detalhe importante: todas as respostas incluem o campo instanceId no JSON e o cabecalho HTTP x-instance-id. Isso permite rastrear em tempo real qual instancia processou cada requisicao — util tanto para depuracao quanto para provar que o balanceamento esta funcionando."
+
+---
+
+## Slide 7 — NGINX: Balanceamento Round-Robin
+
+> "O NGINX e configurado com um bloco upstream chamado api_cluster que lista as duas instancias. Sem mais nenhuma diretiva, o algoritmo padrao e round-robin: req 1 vai para app1, req 2 vai para app2, req 3 volta para app1, e assim por diante."
+
+> "Cinco pontos importantes sobre esse comportamento: a distribuicao e ciclica e automatica; a carga fica equitativa, cada instancia recebe em torno de 50% das requisicoes; o timeout de conexao e de 1 segundo — se app-1 nao responder nesse tempo, o NGINX a marca como indisponivel; quando a instancia volta, ela e reincorporada automaticamente sem nenhuma intervencao manual; e por ultimo — como o NGINX nao garante que o mesmo usuario caia sempre na mesma instancia, a aplicacao obrigatoriamente precisa ser stateless."
+
+---
+
+## Slide 8 — Monitoramento e Metricas
+
+> "A solucao tem tres camadas de observabilidade. O endpoint /health e o que o NGINX usa para detectar instancias vivas — retorna status ok ou error, o instanceId, e se o banco esta conectado."
+
+> "O endpoint /metrics expoe o contador de requisicoes e o tempo medio de resposta de cada instancia individualmente. Isso permite comparar a carga entre elas."
+
+> "E o frontend e um dashboard em tempo real que agrega tudo isso: mostra o status verde ou vermelho de cada instancia, um grafico de barras com a distribuicao das requisicoes, o log de cada chamada e de qual instancia respondeu, e botoes para disparar 20 ou 50 requisicoes de teste. Ele atualiza a cada 8 segundos automaticamente."
+
+---
+
+## Slide 9 — Demonstracao: Distribuicao de Carga
+
+> "Agora vamos ver ao vivo."
+
+*[No navegador em http://localhost:8080, clique em "20 requisicoes"]*
+
+> "Disparamos 20 requisicoes simultaneas. O grafico mostra aproximadamente 10 para cada instancia — 50% cada. O log confirma a alternancia: req 1 foi para app-1, req 2 para app-2, req 3 para app-1. O campo instanceId em cada linha prova qual processou."
+
+> "Isso demonstra os dois principios centrais: o NGINX funciona como ponto unico de entrada e distribui automaticamente; nenhuma instancia fica sobrecarregada enquanto a outra fica ociosa. Com N instancias, cada uma processaria 1/N da carga total."
+
+---
+
+## Slide 10 — Demonstracao: Resiliencia a Falhas
+
+> "Agora o teste mais impactante: o que acontece quando uma instancia cai?"
+
+*[Abra um segundo terminal e execute:]*
 ```powershell
 docker compose stop app1
 ```
 
-Volte ao navegador e clique em **"20 requisições"** novamente.
+> "Derrubei a app-1. No painel ela aparece vermelha — offline. Vou disparar mais 20 requisicoes."
 
-> *"Acabei de derrubar a instância app-1. Observe no painel que ela aparece como offline. Mas o sistema continua funcionando — o nginx detectou que app-1 não responde e redireciona 100% do tráfego para app-2. Nenhuma requisição foi perdida pelo usuário. Isso é a resiliência que a escalabilidade horizontal oferece."*
+*[Clique em "20 requisicoes" novamente]*
 
-Para restaurar:
+> "O sistema nao parou. O NGINX tentou conectar em app-1, teve timeout de 1 segundo, marcou como indisponivel, e redirecionou 100% do trafego para app-2. Nenhuma requisicao foi perdida. Isso e impossivel em uma arquitetura de instancia unica — la, a queda significa indisponibilidade total."
 
+*[Restaure:]*
 ```powershell
 docker compose start app1
 ```
 
-> *"Ao religar app-1, ela volta ao pool automaticamente e o nginx retoma a distribuição."*
+> "Ao religar app-1, ela volta ao pool automaticamente e o NGINX retoma a distribuicao round-robin. Sem configuracao manual, sem reiniciar nada."
 
 ---
 
-### 6. Mostrar o tempo médio de resposta
+## Slide 11 — Trade-offs e Decisoes Arquiteturais
 
-Após disparar 50 requisições, aponte para o painel de instâncias.
+> "Toda decisao arquitetural tem custos. As vantagens da nossa solucao sao claras: alta disponibilidade, escalabilidade linear, possibilidade de deploys sem downtime atualizando uma instancia por vez, custo granular e isolamento de falhas."
 
-> *"Cada instância exibe seu tempo médio de resposta independentemente. Com duas instâncias, cada uma processa metade da carga — o que mantém o tempo de resposta baixo mesmo com muitas requisições simultâneas. Se houvesse somente uma instância, ela processaria tudo sozinha e o tempo subiria."*
+> "Mas existem limitacoes reais. Com muitas instancias, o banco de dados vira o novo gargalo — a solucao para isso em producao seria connection pooling e replicas de leitura. Em cenarios com cache distribuido pode haver leituras de dados ligeiramente desatualizados. A complexidade operacional aumenta com mais componentes para monitorar. E o proprio NGINX, na configuracao atual, e um ponto unico de falha — em producao ele ficaria em cluster Active-Passive."
 
----
-
-## Conceitos que o professor vai perguntar
-
-### O que é escalabilidade horizontal?
-
-> Adicionar **mais instâncias** da mesma aplicação para dividir o trabalho, ao invés de colocar mais memória/CPU em um único servidor (escalabilidade vertical). É mais barato, mais resiliente e sem limite teórico de crescimento.
-
-### Por que a aplicação deve ser stateless?
-
-> Uma aplicação **stateless** (sem estado local) não guarda nada em memória entre requisições — ela usa o banco de dados para tudo. Se a app-1 guardar o carrinho de compras de um usuário na própria memória, e a próxima requisição do mesmo usuário cair na app-2, o carrinho some.
->
-> **Neste projeto:** os dados ficam no PostgreSQL, que é compartilhado. Qualquer instância pode atender qualquer requisição e vai ter acesso aos mesmos dados.
-
-### Quais problemas surgem com estado local em memória?
-
-> - **Sessões inconsistentes:** usuário loga na app-1, próxima requisição vai para app-2, que não sabe que ele está logado.
-> - **Contadores errados:** se cada instância conta requisições separadamente, os totais não batem.
-> - **Cache desatualizado:** app-1 atualiza um registro, app-2 ainda serve o valor antigo do cache dela.
-> - **Perda de dados:** se a instância cair, tudo que estava na memória dela se perde.
-
-### O que é round-robin?
-
-> É o algoritmo padrão do nginx: ele mantém uma fila circular de servidores e envia cada nova requisição para o próximo da fila. Com 2 instâncias: req 1 → app-1, req 2 → app-2, req 3 → app-1, e assim por diante. Distribui a carga de forma igual.
-
-### Por que o nginx detecta falha automaticamente?
-
-> O nginx tenta se conectar à instância. Se a conexão falha (`proxy_connect_timeout 1s`), ele marca aquela instância como indisponível temporariamente e redireciona para as outras. Quando a instância volta, ele a reincorpora ao pool.
+> "Essas limitacoes sao conhecidas e sao o proximo passo natural de evolucao da arquitetura."
 
 ---
 
-## Métricas obrigatórias — onde mostrar cada uma
+## Slide 12 — Conclusao
 
-| Métrica exigida | Onde demonstrar |
+> "Para fechar: todos os requisitos do trabalho foram atendidos. CRUD completo rodando em multiplas instancias com balanceamento real, identificacao de instancia em cada requisicao, metricas por instancia e tolerancia a falhas demonstrada ao vivo."
+
+> "O design e stateless por principio — nenhum estado em memoria local, PostgreSQL compartilhado garante consistencia. A arquitetura e extensivel: adicionar uma terceira instancia exige uma linha no docker-compose.yml e uma linha no nginx.conf, sem alterar uma linha de codigo. E temos observabilidade completa com dashboard, /health e /metrics."
+
+---
+
+## Perguntas que o professor pode fazer
+
+**O que e escalabilidade horizontal?**
+Adicionar mais instancias identicas da aplicacao para dividir a carga, ao inves de aumentar os recursos de um unico servidor. E mais barato, mais resiliente e sem limite pratico de crescimento.
+
+**Por que a aplicacao precisa ser stateless?**
+Porque o balanceador nao garante que o mesmo usuario va sempre para a mesma instancia. Se houver estado em memoria, requisicoes consecutivas do mesmo usuario podem ir para instancias diferentes e perder o contexto. Com stateless, isso nao importa — qualquer instancia entrega o mesmo resultado.
+
+**Como o NGINX detecta que uma instancia caiu?**
+Tenta estabelecer conexao TCP. Se a conexao falha dentro do proxy_connect_timeout (configurado em 1 segundo), a instancia e marcada como indisponivel e removida do pool temporariamente.
+
+**O que acontece com requisicoes em andamento quando uma instancia cai?**
+Requisicoes ja em processamento na instancia que caiu sao perdidas. Novas requisicoes sao redirecionadas automaticamente. Em producao, o cliente implementaria retry para lidar com esse caso.
+
+**Como adicionar mais instancias?**
+No docker-compose.yml, adicionar um novo servico app3 com a mesma imagem. No nginx.conf, adicionar `server app3:3000;` no bloco upstream. Nenhuma alteracao no codigo da API.
+
+---
+
+## Mapa slide x requisito
+
+| Requisito exigido | Slide |
 |---|---|
-| Múltiplas instâncias em execução | Painel "Instâncias em execução" — status verde nas duas |
-| Distribuição de requisições | Seção "Demonstração de balanceamento" — gráfico de barras |
-| Identificação da instância | Badge no header + coluna "Instância" na tabela |
-| Comportamento sob carga | Botão "50 requisições" — log mostrando alternância |
-| Tempo médio de resposta | Painel de instâncias — campo "Tempo médio" |
-| Impacto da falha de instância | `docker compose stop app1` → mostrar app-1 offline, sistema funciona |
-| Discussão sobre estado | Explicar que dados ficam no PostgreSQL compartilhado |
+| Multiplas instancias em execucao | Slide 3 (arquitetura) + Slide 8 (dashboard) |
+| Distribuicao de requisicoes | Slide 7 (round-robin) + Slide 9 (demo ao vivo) |
+| Identificacao da instancia | Slide 6 (instanceId) + Slide 9 (log) |
+| Comportamento sob carga | Slide 9 (20 requisicoes) |
+| Tempo medio de resposta | Slide 8 (/metrics) |
+| Impacto da falha de instancia | Slide 10 (demo stop/start) |
+| Discussao sobre estado | Slide 5 (stateless) + Slide 11 (trade-offs) |

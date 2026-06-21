@@ -1,102 +1,161 @@
-# API Acadêmica com Escalabilidade Horizontal e Balanceamento de Carga
+# API Academica — Escalabilidade Horizontal e Balanceamento de Carga
 
-Esta solução implementa uma API acadêmica com suporte a CRUD de registros e demonstração de escalabilidade horizontal usando múltiplas instâncias e um balanceador de carga.
+API REST academica executando em multiplas instancias com balanceamento de carga NGINX e banco de dados PostgreSQL compartilhado.
 
-## O que está incluído
+## Prerequisitos
 
-- API RESTful com endpoints para cadastrar, consultar, listar, atualizar e remover registros.
-- Duas instâncias da aplicação (`app1` e `app2`).
-- Balanceador de carga NGINX que distribui requisições entre as instâncias.
-- Banco de dados PostgreSQL externo que mantém o estado dos registros.
-- Identificação da instância que respondeu a cada requisição via `x-instance-id`.
-- Endpoint de métricas para verificar quantidade de requisições e tempo médio de resposta.
+- [Docker Desktop](https://www.docker.com/products/docker-desktop/) instalado e em execucao
 
-## Como executar
-
-### 1. Instalar Docker Desktop
-
-Se você ainda não tem Docker instalado, baixe e instale o Docker Desktop para Windows.
-
-### 2. Iniciar a solução
-
-Abra PowerShell no diretório do projeto (`d:\puc\TRABALOARQUITETURA`) e execute:
+## Iniciar o sistema
 
 ```powershell
 docker compose up --build
 ```
 
-O NGINX ficará disponível em `http://localhost:8080`.
+Aguarde as duas linhas abaixo aparecerem no terminal:
+
+```
+app1-1  | API academic listening on port 3000 (instance=app-1)
+app2-1  | API academic listening on port 3000 (instance=app-2)
+```
+
+Abra o navegador em: **http://localhost:8080**
+
+## Parar o sistema
+
+```powershell
+docker compose down
+```
+
+Para parar e apagar os dados do banco:
+
+```powershell
+docker compose down -v
+```
+
+## Acessos diretos
+
+| Endereco | O que acessa |
+|---|---|
+| http://localhost:8080 | Balanceador de carga (NGINX) + frontend |
+| http://localhost:3001 | Instancia app-1 direto |
+| http://localhost:3002 | Instancia app-2 direto |
 
 ## Endpoints da API
 
-A API está disponível através do balanceador em `http://localhost:8080`.
+Todos os endpoints estao disponiveis pelo balanceador em `http://localhost:8080`.
 
-- `GET /records` - lista todos os registros.
-- `GET /records/:id` - consulta um registro por ID.
-- `POST /records` - cria um novo registro. Corpo JSON:
-  ```json
-  {
-    "name": "Aluno Exemplo",
-    "type": "matricula",
-    "detail": "Registro de matrícula para semestre 1"
-  }
-  ```
-- `PUT /records/:id` - atualiza um registro existente.
-- `DELETE /records/:id` - remove um registro.
-- `GET /health` - verifica saúde da instância e conexão com o banco.
-- `GET /metrics` - mostra métricas de requisições e tempo médio de resposta.
+| Metodo | Rota | Descricao |
+|---|---|---|
+| GET | `/records` | Lista todos os registros |
+| GET | `/records/:id` | Consulta um registro por ID |
+| POST | `/records` | Cria um novo registro |
+| PUT | `/records/:id` | Atualiza um registro existente |
+| DELETE | `/records/:id` | Remove um registro |
+| GET | `/health` | Saude da instancia e conexao com o banco |
+| GET | `/metrics` | Contador de requisicoes e tempo medio de resposta |
 
-## Testando o balanceamento de carga
+### Corpo JSON para POST e PUT
 
-Cada resposta inclui o cabeçalho `x-instance-id` com a instância que respondeu.
+```json
+{
+  "name": "Joao Silva",
+  "type": "matricula",
+  "detail": "Engenharia de Software — 5o semestre"
+}
+```
 
-Por exemplo:
+Campos `name` e `type` sao obrigatorios. `detail` e opcional.
+
+Tipos sugeridos: `matricula`, `disciplina`, `nota`, `aluno`.
+
+### Identificacao da instancia
+
+Toda resposta inclui:
+- Campo `instanceId` no corpo JSON
+- Cabecalho HTTP `x-instance-id`
+
+## Testando pelo terminal
 
 ```powershell
+# Ver qual instancia respondeu (observar x-instance-id no cabecalho)
 curl -i http://localhost:8080/records
-```
 
-Chamando várias vezes, você deve ver `app-1` e `app-2` alternando como resposta.
+# Criar um registro
+curl -X POST http://localhost:8080/records `
+  -H "Content-Type: application/json" `
+  -d '{"name":"Maria Souza","type":"matricula","detail":"Sistemas de Informacao"}'
 
-### Criar e consultar registros
-
-```powershell
-curl -X POST http://localhost:8080/records -H "Content-Type: application/json" -d "{\"name\": \"João Silva\", \"type\": \"matricula\", \"detail\": \"Curso de Engenharia de Software\"}"
-
+# Listar todos
 curl http://localhost:8080/records
+
+# Consultar por ID
+curl http://localhost:8080/records/1
+
+# Atualizar
+curl -X PUT http://localhost:8080/records/1 `
+  -H "Content-Type: application/json" `
+  -d '{"name":"Maria Souza","type":"nota","detail":"Atualizado"}'
+
+# Remover
+curl -X DELETE http://localhost:8080/records/1
+
+# Ver metricas de uma instancia especifica
+curl http://localhost:3001/metrics
+curl http://localhost:3002/metrics
 ```
 
-### Simular falha de uma instância
-
-Pare uma instância e continue usando o balanceador:
+## Simular falha de instancia
 
 ```powershell
+# Derrubar app-1
 docker compose stop app1
+
+# O sistema continua respondendo via app-2
 curl http://localhost:8080/records
+
+# Restaurar app-1
+docker compose start app1
 ```
 
-A outra instância continuará respondendo, o que demonstra tolerância a falha.
+## Escalar para mais instancias
 
-## Por que a solução é escalável
+Para adicionar uma terceira instancia, acrescente ao `docker-compose.yml`:
 
-- A aplicação é stateless: cada instância não guarda os dados localmente em memória.
-- O estado dos registros é mantido no PostgreSQL, que é um serviço externo compartilhado.
-- O NGINX distribui requisições entre `app1` e `app2`.
-- Cada instância responde com `x-instance-id`, mostrando claramente a distribuição de carga.
+```yaml
+app3:
+  build: .
+  environment:
+    INSTANCE_ID: app-3
+    PGHOST: db
+    PGUSER: appuser
+    PGPASSWORD: secret
+    PGDATABASE: academic
+  depends_on:
+    db:
+      condition: service_healthy
+```
 
-## Observações importantes
+E adicione `app3:3000` ao bloco `upstream` do `nginx.conf`.
 
-- O uso de memória local para estado impede escalabilidade horizontal verdadeira.
-- Com esta implementação, a lógica de negócio permanece nas instâncias, e o banco de dados compartilha o estado.
-- Ao remover ou parar uma instância, as requisições continuam sendo atendidas por outra instância.
+## Arquitetura
+
+```
+Cliente (navegador / curl)
+         |
+       NGINX  <-- balanceador de carga (round-robin, porta 8080)
+      /      \
+   app-1    app-2   <-- instancias Node.js identicas (Express)
+      \      /
+    PostgreSQL       <-- banco de dados compartilhado (porta 5432)
+```
 
 ## Arquivos principais
 
-- `server.js` - lógica da API e métricas.
-- `Dockerfile` - imagem da aplicação.
-- `docker-compose.yml` - orquestração das instâncias, banco e balanceador.
-- `nginx.conf` - configuração do load balancer.
-
----
-
-Se quiser, posso também criar um script de demonstração em PowerShell para gerar carga e mostrar a distribuição automática entre as instâncias.
+| Arquivo | Funcao |
+|---|---|
+| `server.js` | API Express com CRUD, metricas e identificacao de instancia |
+| `Dockerfile` | Imagem Node.js 20 Alpine da aplicacao |
+| `docker-compose.yml` | Orquestracao dos servicos (app1, app2, db, lb) |
+| `nginx.conf` | Configuracao do balanceador round-robin |
+| `public/index.html` | Frontend com dashboard de monitoramento em tempo real |
