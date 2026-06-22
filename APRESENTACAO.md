@@ -1,6 +1,6 @@
 # Roteiro de Apresentacao — Escalabilidade Horizontal e Balanceamento de Carga
 
-> **Formato:** 12 slides | Tempo estimado: 15–20 minutos + demo ao vivo
+> **Formato:** 13 slides | Tempo estimado: 15–20 minutos + demo ao vivo
 
 ---
 
@@ -27,11 +27,11 @@ Abra no navegador: **http://localhost:8080**
 
 ---
 
-## Slide 2 — Contexto e Problema
+## Slide 2 — Problema e Objetivos do Projeto
 
-> "O cenario e simples: uma universidade tem uma API para gestao academica. Em periodos de matricula, o volume de acessos explode. Uma unica instancia da aplicacao nao aguenta esse pico — ela fica lenta ou cai."
+> "O cenario e simples: uma universidade tem uma API para gestao academica — matriculas, notas, inscricoes. Em periodos criticos como matriculas online, o volume de acessos cresce dramaticamente em curto intervalo."
 
-> "O problema classico de instancia unica e triplo: e um gargalo de desempenho, e um ponto unico de falha, e exige parada total para manutencao. A solucao que implementamos e distribuir a carga entre multiplas instancias identicas usando um balanceador na frente."
+> "O problema classico de instancia unica e triplo: e um gargalo de desempenho, e um ponto unico de falha, e exige parada total para manutencao. O objetivo do trabalho e distribuir requisicoes entre multiplas instancias identicas usando balanceador de carga para garantir disponibilidade e performance."
 
 ---
 
@@ -39,11 +39,17 @@ Abra no navegador: **http://localhost:8080**
 
 > "O fluxo e este: o cliente faz uma requisicao HTTP na porta 8080. O NGINX recebe, escolhe qual instancia vai responder usando round-robin, e repassa para app-1 ou app-2. As duas instancias sao identicas — mesmo codigo, mesma porta interna 3000. Ambas acessam o mesmo banco PostgreSQL. Por isso qualquer instancia pode atender qualquer requisicao sem diferenca para o usuario."
 
-> "A stack: Node.js 20 com Express na API, PostgreSQL 15 como unico repositorio de dados, NGINX como balanceador, e Docker Compose orquestrando os quatro containers."
+> "A stack: Node.js 20 com Express na API, NGINX como balanceador com deteccao de falhas, PostgreSQL 15 como unico repositorio de dados, e Docker Compose orquestrando os quatro containers."
 
 ---
 
-## Slide 4 — Escalabilidade: Horizontal vs Vertical
+## Slide 4 — Tecnologias e Ferramentas Utilizadas
+
+> "Quatro tecnologias formam a base do projeto. Node.js 20 com Express e o runtime JavaScript que construimos a API RESTful — stateless, com CRUD completo e metricas por instancia. O NGINX atua como reverse proxy e load balancer, com algoritmo round-robin e timeout de conexao de 1 segundo. O PostgreSQL 15 e o banco de dados relacional compartilhado entre todas as instancias, sendo o unico repositorio de estado real da aplicacao. E o Docker Compose orquestra tudo: app1, app2, banco e balanceador em containers isolados."
+
+---
+
+## Slide 5 — Escalabilidade: Horizontal vs Vertical
 
 > "Existem duas formas de lidar com crescimento de carga. Escalabilidade vertical e colocar mais CPU e RAM no mesmo servidor. Funciona ate um ponto, mas o custo cresce de forma exponencial, existe um limite fisico de hardware, e o ponto unico de falha continua la."
 
@@ -51,7 +57,7 @@ Abra no navegador: **http://localhost:8080**
 
 ---
 
-## Slide 5 — Stateless: O Pilar da Escalabilidade Horizontal
+## Slide 6 — Stateless: O Pilar da Escalabilidade Horizontal
 
 > "Para que o balanceamento funcione, a aplicacao precisa ser stateless — sem estado local em memoria. Vamos entender por que isso e obrigatorio."
 
@@ -61,7 +67,7 @@ Abra no navegador: **http://localhost:8080**
 
 ---
 
-## Slide 6 — Endpoints da API
+## Slide 7 — Endpoints da API
 
 > "A API implementa CRUD completo. GET /records lista todos os registros. GET /records/:id consulta um especifico. POST cria, PUT atualiza, DELETE remove."
 
@@ -71,15 +77,15 @@ Abra no navegador: **http://localhost:8080**
 
 ---
 
-## Slide 7 — NGINX: Balanceamento Round-Robin
+## Slide 8 — NGINX: Balanceamento Round-Robin
 
 > "O NGINX e configurado com um bloco upstream chamado api_cluster que lista as duas instancias. Sem mais nenhuma diretiva, o algoritmo padrao e round-robin: req 1 vai para app1, req 2 vai para app2, req 3 volta para app1, e assim por diante."
 
-> "Cinco pontos importantes sobre esse comportamento: a distribuicao e ciclica e automatica; a carga fica equitativa, cada instancia recebe em torno de 50% das requisicoes; o timeout de conexao e de 1 segundo — se app-1 nao responder nesse tempo, o NGINX a marca como indisponivel; quando a instancia volta, ela e reincorporada automaticamente sem nenhuma intervencao manual; e por ultimo — como o NGINX nao garante que o mesmo usuario caia sempre na mesma instancia, a aplicacao obrigatoriamente precisa ser stateless."
+> "Quatro pontos importantes: a distribuicao e ciclica e automatica, cada instancia recebe em torno de 50% das requisicoes; o timeout de conexao e de 1 segundo — se app-1 nao responder, o NGINX a marca como indisponivel; quando a instancia volta, ela e reincorporada automaticamente sem nenhuma intervencao manual; e como o NGINX nao garante que o mesmo usuario caia sempre na mesma instancia, a aplicacao obrigatoriamente precisa ser stateless."
 
 ---
 
-## Slide 8 — Monitoramento e Metricas
+## Slide 9 — Monitoramento e Metricas
 
 > "A solucao tem tres camadas de observabilidade. O endpoint /health e o que o NGINX usa para detectar instancias vivas — retorna status ok ou error, o instanceId, e se o banco esta conectado."
 
@@ -87,9 +93,11 @@ Abra no navegador: **http://localhost:8080**
 
 > "E o frontend e um dashboard em tempo real que agrega tudo isso: mostra o status verde ou vermelho de cada instancia, um grafico de barras com a distribuicao das requisicoes, o log de cada chamada e de qual instancia respondeu, e botoes para disparar 20 ou 50 requisicoes de teste. Ele atualiza a cada 8 segundos automaticamente."
 
+> "Essas metricas cobrem todos os requisitos do trabalho: multiplas instancias, distribuicao de requisicoes, identificacao de instancia, tempo medio de resposta e comportamento sob carga."
+
 ---
 
-## Slide 9 — Demonstracao: Distribuicao de Carga
+## Slide 10 — Resultados Obtidos: Distribuicao de Carga
 
 > "Agora vamos ver ao vivo."
 
@@ -101,7 +109,7 @@ Abra no navegador: **http://localhost:8080**
 
 ---
 
-## Slide 10 — Demonstracao: Resiliencia a Falhas
+## Slide 11 — Demonstracao: Resiliencia a Falhas
 
 > "Agora o teste mais impactante: o que acontece quando uma instancia cai?"
 
@@ -125,17 +133,17 @@ docker compose start app1
 
 ---
 
-## Slide 11 — Trade-offs e Decisoes Arquiteturais
+## Slide 12 — Aprendizados da Equipe
 
-> "Toda decisao arquitetural tem custos. As vantagens da nossa solucao sao claras: alta disponibilidade, escalabilidade linear, possibilidade de deploys sem downtime atualizando uma instancia por vez, custo granular e isolamento de falhas."
+> "Toda decisao arquitetural tem custos. As vantagens confirmadas sao: alta disponibilidade — falha de uma instancia nao derruba o servico; escalabilidade linear — adicionar instancias aumenta o throughput proporcionalmente; possibilidade de deploys sem downtime atualizando uma instancia por vez; e custo granular, alocando apenas as instancias necessarias para a carga atual."
 
-> "Mas existem limitacoes reais. Com muitas instancias, o banco de dados vira o novo gargalo — a solucao para isso em producao seria connection pooling e replicas de leitura. Em cenarios com cache distribuido pode haver leituras de dados ligeiramente desatualizados. A complexidade operacional aumenta com mais componentes para monitorar. E o proprio NGINX, na configuracao atual, e um ponto unico de falha — em producao ele ficaria em cluster Active-Passive."
+> "Mas existem limitacoes reais. Com muitas instancias, o banco de dados vira o novo gargalo — a solucao para isso em producao seria connection pooling e replicas de leitura. Em cenarios com cache distribuido pode haver leituras de dados ligeiramente desatualizados. A complexidade operacional aumenta com mais componentes para monitorar. E o proprio NGINX, na configuracao atual, e um ponto unico de falha — em producao ele ficaria em cluster."
 
 > "Essas limitacoes sao conhecidas e sao o proximo passo natural de evolucao da arquitetura."
 
 ---
 
-## Slide 12 — Conclusao
+## Slide 13 — Conclusao
 
 > "Para fechar: todos os requisitos do trabalho foram atendidos. CRUD completo rodando em multiplas instancias com balanceamento real, identificacao de instancia em cada requisicao, metricas por instancia e tolerancia a falhas demonstrada ao vivo."
 
@@ -166,10 +174,10 @@ No docker-compose.yml, adicionar um novo servico app3 com a mesma imagem. No ngi
 
 | Requisito exigido | Slide |
 |---|---|
-| Multiplas instancias em execucao | Slide 3 (arquitetura) + Slide 8 (dashboard) |
-| Distribuicao de requisicoes | Slide 7 (round-robin) + Slide 9 (demo ao vivo) |
-| Identificacao da instancia | Slide 6 (instanceId) + Slide 9 (log) |
-| Comportamento sob carga | Slide 9 (20 requisicoes) |
-| Tempo medio de resposta | Slide 8 (/metrics) |
-| Impacto da falha de instancia | Slide 10 (demo stop/start) |
-| Discussao sobre estado | Slide 5 (stateless) + Slide 11 (trade-offs) |
+| Multiplas instancias em execucao | Slide 3 (arquitetura) + Slide 9 (dashboard) |
+| Distribuicao de requisicoes | Slide 8 (round-robin) + Slide 10 (resultados ao vivo) |
+| Identificacao da instancia | Slide 7 (instanceId) + Slide 10 (log) |
+| Comportamento sob carga | Slide 10 (20 requisicoes) |
+| Tempo medio de resposta | Slide 9 (/metrics) |
+| Impacto da falha de instancia | Slide 11 (demo stop/start) |
+| Discussao sobre estado | Slide 6 (stateless) + Slide 12 (trade-offs) |
